@@ -8,6 +8,9 @@ from google.auth.transport.requests import Request
 
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+# The labels from where to get the messages (only starred by default)
+# Other possible values can include IMPORTANT, INBOX, UNREAD, CATEGORY_UPDATES, CATEGORY_PROMOTIONS, CATEGORY_PERSONAL, CATEGORY_SOCIAL
+# Note that the script doesn't check for duplicates when running the first time and mails are in more than one category.
 LABEL_IDS = ['STARRED']
 USER_ID = 'me'
 EMAIL_URL = 'https://mail.google.com/mail/#all/'
@@ -38,7 +41,7 @@ def download_mails():
 
     service = build('gmail', 'v1', credentials=creds)
 
-    # Get the starred messages
+    # Get the messages
     try:
         response = service.users().messages().list(userId=USER_ID, labelIds=LABEL_IDS).execute()
 
