@@ -13,5 +13,6 @@ Then install the libraries needed for accessing the GMail API:
 ```shell script
 pip3 install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib
 ```
+You need to obtain an API secret from the [Dynalist Developers page](https://dynalist.io/developer). Once you have it, save it in a file called `dynalistToken.txt` in the project root folder.
 
 By default, the script adds only the starred emails to Dynalist. 
