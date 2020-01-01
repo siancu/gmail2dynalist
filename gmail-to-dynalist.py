@@ -3,6 +3,7 @@ import os.path
 import sys
 
 import requests
+import sqlite_utils
 from googleapiclient import errors
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -19,6 +20,8 @@ USER_ID = 'me'
 EMAIL_URL = 'https://mail.google.com/mail/#all/'
 DYNALIST_INBOX_URL = 'https://dynalist.io/api/v1/inbox/add'
 DYNALIST_TOKEN_FILENAME = 'dynalistToken.txt'
+EMAILS_DB_FILENAME = 'emails.db'
+EMAILS_DB_TABLE = 'emails'
 
 
 def build_gmail_api_service():
@@ -69,7 +72,7 @@ def download_messages(gmail_service):
         print('An error occurred downloading the messages: %s' % error)
 
 
-def process_message(gmail_service, message_id, dynalist_token):
+def process_message(gmail_service, emails_db, message_id, dynalist_token):
     try:
         message = gmail_service.users().messages().get(userId=USER_ID,
                                                        id=message_id,
@@ -79,7 +82,12 @@ def process_message(gmail_service, message_id, dynalist_token):
         subject = message['payload']['headers'][0]['value']
         message_url = construct_message_url(message_id)
 
-        post_to_dynalist(dynalist_token, subject, message_url)
+        if check_email_against_db(emails_db, message_id):
+            print('Message with id ' + message_id + ' and subject ' + subject + ' will be posted to Dynalist')
+            # post_to_dynalist(dynalist_token, subject, message_url)
+            save_email_to_db(emails_db, message_id)
+        else:
+            print('Message with id ' + message_id + ' and subject ' + subject + ' already added to Dynalist. Skipping.')
 
     except errors.HttpError as error:
         print('An error occured downloading the message: %s' % error)
@@ -98,6 +106,9 @@ def get_dynalist_token():
 
 
 def post_to_dynalist(dynalist_token, subject, message_url):
+    """
+    POSTs the message with subject and message_url to Dynalist
+    """
     request_body = {
         "token": dynalist_token,
         "content": subject,
@@ -114,7 +125,23 @@ def post_to_dynalist(dynalist_token, subject, message_url):
         msg = response['_msg']
         sys.exit("Cannot create Dynalist node. Response code is " + response_code + " and the error message is " + msg)
 
-    print("Added the message with subject " + subject + " to dynalist.")
+
+def check_email_against_db(emails_db, message_id):
+    """
+    Checks if the message with message_id exists in the database or not.
+    Returns True if the message is not already saved in the database.
+    """
+    try:
+        emails_db[EMAILS_DB_TABLE].get(message_id)
+    except sqlite_utils.db.NotFoundError:
+        return True
+    return False
+
+def save_email_to_db(emails_db, message_id):
+    """
+    Saves the message_id in the database
+    """
+    emails_db[EMAILS_DB_TABLE].insert({"id" : message_id}, pk="id")
 
 
 if __name__ == '__main__':
@@ -122,6 +149,11 @@ if __name__ == '__main__':
     downloaded_messages = download_messages(service)
 
     token = get_dynalist_token()
+    db = sqlite_utils.Database(EMAILS_DB_FILENAME)
+    table = db[EMAILS_DB_TABLE]
+
+    if not table.exists:
+        table.create({"id": str}, pk="id")
 
     for downloaded_message in downloaded_messages:
-        process_message(service, downloaded_message['id'], token.decode('utf-8'))
+        process_message(service, db, downloaded_message['id'], token.decode('utf-8'))
